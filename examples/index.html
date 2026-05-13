@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coddy.js Entegrasyon Örneği</title>
+    <!-- Demo sayfası güzel görünsün diye Tailwind ekliyoruz (Coddy'nin buna ihtiyacı YOKTUR) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: sans-serif; }
+    </style>
+</head>
+<body class="p-10 flex flex-col items-center justify-center min-h-screen">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-xl w-full border border-slate-200">
+        <h1 class="text-3xl font-bold text-slate-800 mb-4">Coddy.js Test Paneli</h1>
+        <p class="text-slate-500 mb-8">Kütüphaneyi projeye dahil ettik. Şimdi aşağıdaki butonlarla Coddy'nin API metodlarını tetikleyebiliriz.</p>
+
+        <div class="space-y-4">
+            <!-- 1. Senaryo: API İsteği -->
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <h3 class="font-semibold text-slate-700 mb-2">1. Form Gönderme / API İsteği</h3>
+                <p class="text-xs text-slate-500 mb-3">İşlem uzun sürdüğünde Coddy'yi çalıştırır, bitince sakinleştirir.</p>
+                <button id="btn-fetch" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow text-sm font-medium transition-colors">
+                    Verileri Çek (Simülasyon)
+                </button>
+            </div>
+
+            <!-- 2. Senaryo: Bildirim Gösterme -->
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <h3 class="font-semibold text-slate-700 mb-2">2. Anlık Bildirim (Notification)</h3>
+                <p class="text-xs text-slate-500 mb-3">Kullanıcı bir şey başardığında veya hata yaptığında geçici mesaj gösterir.</p>
+                <button id="btn-success" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded shadow text-sm font-medium transition-colors">
+                    Başarılı İşlem
+                </button>
+                <button id="btn-error" class="px-4 py-2 ml-2 bg-rose-500 hover:bg-rose-600 text-white rounded shadow text-sm font-medium transition-colors">
+                    Hata Oluştu
+                </button>
+            </div>
+
+            <!-- 3. Senaryo: Manuel Durum Değişimi -->
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <h3 class="font-semibold text-slate-700 mb-2">3. Manuel State Değişimi</h3>
+                <button id="btn-sleep" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded shadow text-sm font-medium transition-colors">
+                    Uyut
+                </button>
+                <button id="btn-wake" class="px-4 py-2 ml-2 bg-orange-500 hover:bg-orange-600 text-white rounded shadow text-sm font-medium transition-colors">
+                    Uyandır (Idle)
+                </button>
+            </div>
+			  <!-- 4. Senaryo: Tema Değişimi -->
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <h3 class="font-semibold text-slate-700 mb-2">4. Tema Kontrolü</h3>
+                <button id="btn-theme-light" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded shadow text-sm font-medium transition-colors">
+                    Açık Tema (Light)
+                </button>
+				 <button id="btn-theme-metallic" class="px-4 py-2 ml-2 bg-slate-300 hover:bg-slate-400 text-slate-800 rounded shadow-sm border border-slate-400 text-sm font-medium transition-colors">
+                    Metalik (Apple)
+                </button>
+                <button id="btn-theme-dark" class="px-4 py-2 ml-2 bg-slate-800 hover:bg-slate-900 text-white rounded shadow text-sm font-medium transition-colors">
+                    Koyu Tema (Dark)
+                </button>
+				
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. ADIM: KÜTÜPHANEYİ DAHİL ET -->
+    <!-- Gerçek projende <script src="path/to/coddy.js"></script> şeklinde dahil edersin -->
+    <script src="../src/coddy.js"></script>
+
+    <!-- 2. ADIM: COODY'Yİ BAŞLAT VE KULLAN -->
+    <script>
+        // Coddy'yi yapılandırarak başlatıyoruz
+        const myBot = new Coddy({
+            position: 'bottom-right', // 'bottom-left' de yapabilirsin
+            offsetX: 30,              // Sağdan 30px boşluk
+            offsetY: 30,              // Alttan 30px boşluk
+            // Kendi projene özel mesaj havuzu oluşturabilirsin
+            messages: {
+                idle: ["Burası çok sessiz...", "Kod yazsana!", "Biraz daha kahve?"],
+                working: ["DERLENİYOR!", "BUNU KİM YAZDI?!", "BUG ARIYORUM..."],
+                sleeping: ["404 Brain Not Found", "Zzz..."]
+            },
+            marqueeText: 'HELLO WORLD',
+            // Dinamik menü tanımı
+            menu: [
+                { 
+                    label: '🚀 İşi Hızlandır', 
+                    onClick: (e, bot) => bot.setState('working', 'TURBO MODU AKTİF!') 
+                },
+                { 
+                    label: '💬 Konuştur', 
+                    onClick: (e, bot) => bot.say("Dinamik menüler harika değil mi?", 4000) 
+                },
+				 
+                {
+                    label: '❓ Soru Sor (Prompt)',
+                    onClick: (e, bot) => {
+                        // bot.ask(baslik, callback_fonksiyonu)
+                        bot.ask("Sistemde ne arıyorsun?", (soruText) => {
+                            // Kullanıcı soruyu yazıp Enter'a basınca burası çalışır!
+                            
+                            // 1. Botu çalışma/düşünme moduna al
+                            bot.setState('working');
+                            
+                            // 2. Yapay zeka simülasyonu (3 saniye sonra cevap ver)
+                            setTimeout(() => {
+                                bot.setState('idle');
+                                bot.say(`"${soruText}" konusu hakkında analiz yapıldı. Her şey yolunda!`, 5000);
+                            }, 3000);
+                        });
+                    }
+                },
+                { 
+                    label: '💤 Uyku Modu', 
+                    onClick: (e, bot) => bot.setState('sleeping') 
+                },
+                { 
+                    label: '❌ Menüyü Kapat', 
+                    onClick: (e, bot) => bot.toggleMenu(false) // Ekstra işlem yapmadan sadece kapatır
+                }
+            ]
+ 
+        });
+
+        /* --- KULLANIM SENARYOLARI (BUTON TETİKLEYİCİLERİ) --- */
+
+        // Senaryo 1: API İsteği Simülasyonu
+        document.getElementById('btn-fetch').addEventListener('click', async () => {
+            // 1. İstek başlamadan önce botu çalışma moduna al (Havuzdan rastgele sinirli bir mesaj seçer)
+            myBot.setState('working');
+            
+            // İstek atılıyor (3 saniyelik sahte bekleme)
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // 2. İstek bitince botu sakinleştir
+            myBot.setState('idle');
+            // İstersen başarı mesajı söylet:
+            myBot.say('Sonunda bitti!', 2000); 
+        });
+
+        // Senaryo 2: Başarı Bildirimi (say metodu)
+        document.getElementById('btn-success').addEventListener('click', () => {
+            // .say(mesaj, ekranda_kalma_süresi_ms)
+            myBot.say('Veriler başarıyla kaydedildi! 🚀', 3000);
+        });
+
+        // Senaryo 3: Hata Bildirimi
+        document.getElementById('btn-error').addEventListener('click', () => {
+            // Hata olduğunda sinirli modda özel mesaj ver
+            myBot.setState('working', 'SİSTEM ÇÖKTÜ! YEDEKLERİ ALIN!');
+            
+            // 4 saniye sonra sakinleş
+            setTimeout(() => {
+                myBot.setState('idle');
+            }, 4000);
+        });
+
+        // Senaryo 4: Uyut / Uyandır
+        document.getElementById('btn-sleep').addEventListener('click', () => {
+            myBot.setState('sleeping');
+        });
+
+        document.getElementById('btn-wake').addEventListener('click', () => {
+            myBot.setState('idle');
+        });
+ // Senaryo 5: Tema Kontrolü
+        document.getElementById('btn-theme-light').addEventListener('click', () => {
+            myBot.setTheme('light');
+        });
+
+        document.getElementById('btn-theme-dark').addEventListener('click', () => {
+            myBot.setTheme('dark');
+        });
+		 document.getElementById('btn-theme-metallic').addEventListener('click', () => {
+            myBot.setTheme('metallic');
+        });
+    </script>
+</body>
+</html>

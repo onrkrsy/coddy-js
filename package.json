@@ -1,0 +1,40 @@
+{
+  "name": "coddy",
+  "version": "0.1.0",
+  "description": "Sayfanızın köşesine oturan, zero-dependency, vanilla JS interaktif geliştirici maskotu.",
+  "main": "src/coddy.js",
+  "files": [
+    "src/",
+    "examples/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "start": "npx --yes http-server -o /examples/",
+    "test": "node --check src/coddy.js"
+  },
+  "keywords": [
+    "mascot",
+    "widget",
+    "assistant",
+    "ui",
+    "vanilla-js",
+    "no-dependencies",
+    "zero-dependency",
+    "javascript"
+  ],
+  "author": "Onur Karasoy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<user>/coddy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/<user>/coddy/issues"
+  },
+  "homepage": "https://github.com/<user>/coddy#readme",
+  "engines": {
+    "node": ">=14"
+  }
+}
