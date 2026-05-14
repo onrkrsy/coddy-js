@@ -60,7 +60,42 @@
                 <button id="btn-theme-dark" class="px-4 py-2 ml-2 bg-slate-800 hover:bg-slate-900 text-white rounded shadow text-sm font-medium transition-colors">
                     Koyu Tema (Dark)
                 </button>
-				
+
+            </div>
+
+            <!-- 5. Senaryo: Mikro Etkileşimler -->
+            <div class="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <h3 class="font-semibold text-amber-800 mb-2">5. Mikro Etkileşimler (kod yok, dene!)</h3>
+                <ul class="text-xs text-amber-900 space-y-1 list-disc list-inside">
+                    <li><strong>Fareyi maskotun üstüne getir</strong> → gözleri büyür ve parlar.</li>
+                    <li><strong>Maskota çift tıkla</strong> → kızar, "DOKUNMA BANA!" tarzı tepki verir.</li>
+                    <li><strong>Maskota sağ tıkla</strong> → snarky bir cevap alırsın.</li>
+                    <li><strong>20 saniye dokunma</strong> → kendiliğinden uykuya geçer (autoSleepTimeout: 20).</li>
+                    <li><strong>Maskotu basılı tutup sürükle</strong> → istediğin yere bırak; pozisyon localStorage'a kaydedilir, sayfayı yenilesen bile orada kalır.</li>
+                </ul>
+            </div>
+
+            <!-- 7. Senaryo: observe + celebrating -->
+            <div class="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                <h3 class="font-semibold text-emerald-800 mb-2">7. Promise.observe + celebrating state</h3>
+                <p class="text-xs text-emerald-900 mb-3">Pending → working, başarı → konfetili kutlama, hata → kırmızı.</p>
+                <button id="btn-observe-ok"   class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow text-sm font-medium">Promise (Başarılı)</button>
+                <button id="btn-observe-fail" class="px-4 py-2 ml-2 bg-rose-600 hover:bg-rose-700 text-white rounded shadow text-sm font-medium">Promise (Hata)</button>
+            </div>
+
+            <!-- 6. Senaryo: Göz İfadeleri -->
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                <h3 class="font-semibold text-slate-700 mb-2">6. Göz İfadeleri (setEyes)</h3>
+                <p class="text-xs text-slate-500 mb-3">Maskotun gözünü farklı şekillere sok. setState çağrılırsa otomatik normale döner.</p>
+                <div class="flex flex-wrap gap-2">
+                    <button data-eyes="wink"   class="eyes-btn px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-medium">Wink</button>
+                    <button data-eyes="shock"  class="eyes-btn px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-medium">Shock</button>
+                    <button data-eyes="heart"  class="eyes-btn px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded text-xs font-medium">Heart</button>
+                    <button data-eyes="tired"  class="eyes-btn px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded text-xs font-medium">Tired</button>
+                    <button data-eyes="angry"  class="eyes-btn px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium">Angry</button>
+                    <button data-eyes="star"   class="eyes-btn px-3 py-1.5 bg-amber-400 hover:bg-amber-500 text-slate-900 rounded text-xs font-medium">Star</button>
+                    <button data-eyes="normal" class="eyes-btn px-3 py-1.5 bg-slate-300 hover:bg-slate-400 text-slate-800 rounded text-xs font-medium">Normal</button>
+                </div>
             </div>
         </div>
     </div>
@@ -76,6 +111,7 @@
             position: 'bottom-right', // 'bottom-left' de yapabilirsin
             offsetX: 30,              // Sağdan 30px boşluk
             offsetY: 30,              // Alttan 30px boşluk
+            autoSleepTimeout: 20,     // 20 sn etkileşim yoksa kendi kendine uyu (0 = kapalı)
             // Kendi projene özel mesaj havuzu oluşturabilirsin
             messages: {
                 idle: ["Burası çok sessiz...", "Kod yazsana!", "Biraz daha kahve?"],
@@ -175,6 +211,21 @@
         });
 		 document.getElementById('btn-theme-metallic').addEventListener('click', () => {
             myBot.setTheme('metallic');
+        });
+
+        // Senaryo 6: Göz İfadeleri
+        document.querySelectorAll('.eyes-btn').forEach(btn => {
+            btn.addEventListener('click', () => myBot.setEyes(btn.dataset.eyes));
+        });
+
+        // Senaryo 7: observe — başarı ve hata
+        document.getElementById('btn-observe-ok').addEventListener('click', () => {
+            const p = new Promise(resolve => setTimeout(() => resolve({ ok: true }), 2000));
+            myBot.observe(p, { workingMsg: 'DEPLOY EDİLİYOR...', successMsg: 'DEPLOY OK!' });
+        });
+        document.getElementById('btn-observe-fail').addEventListener('click', () => {
+            const p = new Promise((_, reject) => setTimeout(() => reject(new Error('TEST_HATASI')), 2000));
+            myBot.observe(p, { workingMsg: 'DENİYORUM...', errorMsg: 'PATLADI! :(' }).catch(() => {});
         });
     </script>
 </body>

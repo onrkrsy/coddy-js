@@ -26,13 +26,18 @@
             offsetY: 40,
             theme: 'dark',
             onClick: null,
+            onContextMenu: null,
+            autoSleepTimeout: 0,
+            draggable: true,
+            persistPosition: true,
             marqueeText: null,
             enableRandomMarquee: true,
             menu: null,
             messages: {
                 idle: ["Kod ver, laf yapma.", "Sıkıldım...", "Deploy alalım mı?", "Neye bakıyorsun?"],
                 working: ["DOKUNMA KODLUYORUM!", "BU KİMİN KODU?!", "DERLENİYOR...!!!", "BÖCEK EZİYORUM!"],
-                sleeping: ["Error: Brain Not Found", "System.exit(0)", "Zzz...", "404 Coffee Not Found"]
+                sleeping: ["Error: Brain Not Found", "System.exit(0)", "Zzz...", "404 Coffee Not Found"],
+                celebrating: ["BAŞARILI!", "YEHA!", "DEPLOY OK!", "TEBRİKLER!", "GREEN BUILD!"]
             }
         };
 
@@ -43,10 +48,15 @@
         this.dom = {};       // DOM elementlerini tutacağımız obje
         this.intervals = {}; // setInterval referansları
         this.customSayTimer = null; // Özel mesajlar için zamanlayıcı
-        
+
         // Kayan Yazı Zamanlayıcıları
-        this.textTimer = null;     
+        this.textTimer = null;
         this.textDuration = null;
+
+        // Mikro etkileşim zamanlayıcıları
+        this._madTimer = null;       // Çift tık öfke animasyonunun süresi
+        this._autoSleepTimer = null; // autoSleepTimeout için inaktivite sayacı
+        this._celebrateTimer = null; // Celebrating state'in otomatik idle'a dönüş zamanlayıcısı
 
         // Kütüphaneyi başlat
         this.init();
@@ -321,6 +331,68 @@
             .coddy-state-sleeping .coddy-hand { transform: translateY(15px); animation: none; }
             .coddy-state-sleeping .coddy-shadow { transform: translateX(-50%) scale(1.2); opacity: 0.2; animation: none; }
 
+            .coddy-state-celebrating .coddy-body {
+                animation: coddy-celebrate-bounce 0.45s ease-in-out infinite;
+                box-shadow: 0 15px 30px rgba(16, 185, 129, 0.4);
+            }
+            .coddy-state-celebrating .coddy-hand {
+                animation: coddy-celebrate-hands 0.45s ease-in-out infinite alternate;
+            }
+            .coddy-state-celebrating .coddy-keyboard { opacity: 0.3; }
+
+            .coddy-confetti {
+                position: absolute;
+                width: 8px; height: 8px;
+                pointer-events: none;
+                opacity: 0; z-index: 30;
+                border-radius: 1px;
+            }
+
+            /* Sürükleme imleci */
+            .coddy-wrapper.coddy-dragging { cursor: grabbing; }
+
+            /* Hover Reaksiyonu — sadece idle'da, mouse takip transform'unu bozmamak için width/box-shadow üzerinden */
+            .coddy-state-idle.coddy-hover .coddy-eye {
+                width: 17px; height: 12px;
+                box-shadow: 0 0 14px var(--coddy-orange), 0 0 28px #FFD500;
+            }
+
+            /* Çift Tık Öfke Reaksiyonu — geçici, eski state üstüne giyilir */
+            .coddy-wrapper.coddy-mad .coddy-body { animation: coddy-rage-shake 0.15s infinite; }
+            .coddy-wrapper.coddy-mad .coddy-eye {
+                background: var(--coddy-red);
+                box-shadow: 0 0 15px var(--coddy-red), 0 0 30px var(--coddy-orange);
+            }
+
+            /* Göz İfadeleri (setEyes API) — state CSS'inden SONRA tanımlandı, cascade ile kazanır */
+            .coddy-wrapper.coddy-expr-wink .coddy-eye.right {
+                height: 2px; clip-path: none; transform: rotate(0);
+            }
+            .coddy-wrapper.coddy-expr-shock .coddy-eye {
+                width: 14px; height: 14px; clip-path: none; border-radius: 50%; transform: none;
+            }
+            .coddy-wrapper.coddy-expr-heart .coddy-eye {
+                width: 14px; height: 12px; transform: none; background: var(--coddy-red);
+                box-shadow: 0 0 12px var(--coddy-red), 0 0 24px var(--coddy-orange);
+                clip-path: polygon(50% 100%, 90% 60%, 100% 30%, 80% 0, 50% 25%, 20% 0, 0 30%, 10% 60%);
+            }
+            .coddy-wrapper.coddy-expr-tired .coddy-eye {
+                width: 14px; height: 8px; transform: none;
+                clip-path: polygon(0 100%, 50% 0, 100% 100%);
+            }
+            .coddy-wrapper.coddy-expr-angry .coddy-eye {
+                height: 6px; background: var(--coddy-red);
+                box-shadow: 0 0 12px var(--coddy-red), 0 0 24px var(--coddy-orange);
+            }
+            .coddy-wrapper.coddy-expr-angry .coddy-eye.left { transform: rotate(25deg); }
+            .coddy-wrapper.coddy-expr-angry .coddy-eye.right { transform: rotate(-25deg); }
+            .coddy-wrapper.coddy-expr-star .coddy-eye {
+                width: 14px; height: 14px; transform: none;
+                background: #FFD500;
+                box-shadow: 0 0 12px #FFD500, 0 0 24px var(--coddy-orange);
+                clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            }
+
             @keyframes coddy-shadow-breathe { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; } 50% { transform: translateX(-50%) scale(0.9); opacity: 0.4; } }
             @keyframes coddy-angry-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
             @keyframes coddy-tap-finger { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
@@ -331,6 +403,9 @@
             @keyframes coddy-cursor-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
             @keyframes coddy-bug-fly { 0% { transform: translate(0, 0) scale(0.5) rotate(0deg); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(1.5) rotate(45deg); opacity: 0; } }
             @keyframes coddy-marquee { 0% { transform: translateX(60px); opacity: 0; } 5% { opacity: 1; } 95% { opacity: 1; } 100% { transform: translateX(calc(-100% - 10px)); opacity: 0; } }
+            @keyframes coddy-celebrate-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+            @keyframes coddy-celebrate-hands { 0% { transform: translateY(0); } 100% { transform: translateY(-12px); } }
+            @keyframes coddy-confetti-fall { 0% { transform: translate(0, 0) rotate(0deg) scale(0.4); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(var(--ctx), var(--cty)) rotate(720deg) scale(1); opacity: 0; } }
         `;
         document.head.appendChild(style);
     }
@@ -435,11 +510,43 @@
             }
         };
 
+        this._onMouseEnter = () => {
+            this.dom.wrapper.classList.add('coddy-hover');
+            this._resetAutoSleepTimer();
+        };
+        this._onMouseLeave = () => {
+            this.dom.wrapper.classList.remove('coddy-hover');
+        };
+
+        this._onDblClick = (e) => {
+            if (this.dom.menu.contains(e.target) || this.dom.prompt.contains(e.target)) return;
+            this._showMadReaction();
+            this._resetAutoSleepTimer();
+        };
+
+        this._onContextMenu = (e) => {
+            if (this.dom.menu.contains(e.target) || this.dom.prompt.contains(e.target)) return;
+            e.preventDefault();
+            this._resetAutoSleepTimer();
+            if (typeof this.config.onContextMenu === 'function') {
+                this.config.onContextMenu(e, this);
+                return;
+            }
+            const snark = ['Sağ tık? Ciddi misin?', 'Burada developer menüsü yok.', 'F12 daha hızlı kanka.', 'Inspect Element bende çalışmaz.'];
+            this.say(snark[Math.floor(Math.random() * snark.length)], 2500);
+        };
+
         document.addEventListener('mousemove', this._onMouseMove);
         document.addEventListener('click', this._onDocClick);
+        this.dom.wrapper.addEventListener('mouseenter', this._onMouseEnter);
+        this.dom.wrapper.addEventListener('mouseleave', this._onMouseLeave);
+        this.dom.wrapper.addEventListener('dblclick', this._onDblClick);
+        this.dom.wrapper.addEventListener('contextmenu', this._onContextMenu);
 
         this.dom.wrapper.addEventListener('click', (e) => {
             if (this.dom.menu.contains(e.target) || this.dom.prompt.contains(e.target)) return;
+            if (this._justDragged) return; // sürüklemeden sonraki click'i yut
+            this._resetAutoSleepTimer();
 
             if (typeof this.config.onClick === 'function') {
                 this.config.onClick(e, this);
@@ -451,6 +558,156 @@
         this.dom.promptInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.dom.promptBtn.click();
         });
+
+        if (this.config.draggable) this._bindDragEvents();
+    }
+
+    /**
+     * Sürükle-bırak desteği. Threshold geçmeden tıklama olarak sayılır.
+     * persistPosition: true ise localStorage'a 'coddy-position' anahtarıyla kaydeder.
+     */
+    _bindDragEvents() {
+        let startX = 0, startY = 0;
+        let originX = 0, originY = 0;
+        let dragging = false;
+        let moved = false;
+        const THRESHOLD = 6;
+
+        this._onPointerDown = (e) => {
+            if (this.dom.menu.contains(e.target) || this.dom.prompt.contains(e.target)) return;
+            const point = e.touches ? e.touches[0] : e;
+            startX = point.clientX;
+            startY = point.clientY;
+            const rect = this.dom.wrapper.getBoundingClientRect();
+            originX = rect.left;
+            originY = rect.top;
+            dragging = true;
+            moved = false;
+            if (e.touches) e.preventDefault();
+        };
+
+        this._onPointerMove = (e) => {
+            if (!dragging) return;
+            const point = e.touches ? e.touches[0] : e;
+            const dx = point.clientX - startX;
+            const dy = point.clientY - startY;
+            if (!moved && Math.hypot(dx, dy) < THRESHOLD) return;
+            moved = true;
+            this.dom.wrapper.classList.add('coddy-dragging');
+            const w = this.dom.wrapper.offsetWidth;
+            const h = this.dom.wrapper.offsetHeight;
+            const newX = Math.max(0, Math.min(window.innerWidth - w, originX + dx));
+            const newY = Math.max(0, Math.min(window.innerHeight - h, originY + dy));
+            this.dom.wrapper.style.left = `${newX}px`;
+            this.dom.wrapper.style.top = `${newY}px`;
+            this.dom.wrapper.style.right = 'auto';
+            this.dom.wrapper.style.bottom = 'auto';
+            if (e.touches) e.preventDefault();
+        };
+
+        this._onPointerUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            if (!moved) return;
+
+            this.dom.wrapper.classList.remove('coddy-dragging');
+            this._justDragged = true;
+            setTimeout(() => { this._justDragged = false; }, 100);
+
+            // Balonun/menünün hangi yöne açılacağını yarıya göre belirle
+            const rect = this.dom.wrapper.getBoundingClientRect();
+            const isLeft = (rect.left + rect.width / 2) < (window.innerWidth / 2);
+            this.dom.wrapper.classList.remove('pos-bottom-right', 'pos-bottom-left');
+            this.dom.wrapper.classList.add(isLeft ? 'pos-bottom-left' : 'pos-bottom-right');
+            this.config.position = isLeft ? 'bottom-left' : 'bottom-right';
+
+            if (this.config.persistPosition) {
+                try {
+                    localStorage.setItem('coddy-position', JSON.stringify({
+                        left: rect.left,
+                        top: rect.top,
+                        side: isLeft ? 'left' : 'right'
+                    }));
+                } catch (e) { /* private mode / quota — sessiz geç */ }
+            }
+
+            const dropMsgs = ['Yallah, koyduğun yer burası mı?', 'Tamam, burası uygun.', 'OK, burada yatarım.', 'Beni hiç sevmiyorsun :('];
+            this.say(dropMsgs[Math.floor(Math.random() * dropMsgs.length)], 2000);
+        };
+
+        this.dom.wrapper.addEventListener('mousedown', this._onPointerDown);
+        this.dom.wrapper.addEventListener('touchstart', this._onPointerDown, { passive: false });
+        document.addEventListener('mousemove', this._onPointerMove);
+        document.addEventListener('touchmove', this._onPointerMove, { passive: false });
+        document.addEventListener('mouseup', this._onPointerUp);
+        document.addEventListener('touchend', this._onPointerUp);
+    }
+
+    _restorePosition() {
+        if (!this.config.persistPosition) return;
+        try {
+            const raw = localStorage.getItem('coddy-position');
+            if (!raw) return;
+            const pos = JSON.parse(raw);
+            if (typeof pos.left !== 'number' || typeof pos.top !== 'number') return;
+            const w = this.dom.wrapper.offsetWidth || 100;
+            const h = this.dom.wrapper.offsetHeight || 120;
+            const left = Math.max(0, Math.min(window.innerWidth - w, pos.left));
+            const top = Math.max(0, Math.min(window.innerHeight - h, pos.top));
+            this.dom.wrapper.style.left = `${left}px`;
+            this.dom.wrapper.style.top = `${top}px`;
+            this.dom.wrapper.style.right = 'auto';
+            this.dom.wrapper.style.bottom = 'auto';
+            if (pos.side === 'left') {
+                this.dom.wrapper.classList.remove('pos-bottom-right');
+                this.dom.wrapper.classList.add('pos-bottom-left');
+                this.config.position = 'bottom-left';
+            } else if (pos.side === 'right') {
+                this.dom.wrapper.classList.remove('pos-bottom-left');
+                this.dom.wrapper.classList.add('pos-bottom-right');
+                this.config.position = 'bottom-right';
+            }
+        } catch (e) { /* corrupt storage — sessiz geç */ }
+    }
+
+    /**
+     * Çift tıkta tetiklenen geçici öfke reaksiyonu.
+     * Asıl state'i değiştirmez; üstüne coddy-mad class'ı giyer.
+     */
+    _showMadReaction() {
+        const angryMessages = ['DOKUNMA BANA!', 'AYNI YERE BASMA!', 'NE BAĞIRIYORSUN?', 'KES ŞUNU!'];
+        const msg = angryMessages[Math.floor(Math.random() * angryMessages.length)];
+
+        this.dom.wrapper.classList.add('coddy-mad');
+        clearTimeout(this.customSayTimer);
+        this.dom.bubble.innerHTML = msg;
+        this.dom.bubble.style.color = 'var(--coddy-red)';
+        this.dom.bubble.classList.add('show');
+
+        clearTimeout(this._madTimer);
+        this._madTimer = setTimeout(() => {
+            this.dom.wrapper.classList.remove('coddy-mad');
+            if (this.state === 'idle') {
+                this.dom.bubble.classList.remove('show');
+            } else {
+                // working/sleeping kendi mesajını geri koysun
+                this.setState(this.state);
+            }
+        }, 1500);
+    }
+
+    /**
+     * autoSleepTimeout config'i set ise, N saniye etkileşim yoksa idle'dan sleeping'e geçirir.
+     * Her etkileşim (mouseenter, click, dblclick, contextmenu, setState, say, ask) bu sayacı sıfırlar.
+     */
+    _resetAutoSleepTimer() {
+        clearTimeout(this._autoSleepTimer);
+        const sec = this.config.autoSleepTimeout;
+        if (!sec || sec <= 0) return;
+        if (this.state === 'sleeping') return;
+        this._autoSleepTimer = setTimeout(() => {
+            if (this.state === 'idle') this.setState('sleeping');
+        }, sec * 1000);
     }
 
     spawnBug() {
@@ -475,6 +732,26 @@
         setTimeout(() => {
             if(this.dom.errorContainer.contains(bug)) bug.remove();
         }, 1500);
+    }
+
+    _spawnConfetti() {
+        const piece = document.createElement('div');
+        piece.className = 'coddy-confetti';
+        const colors = ['#FF4D00', '#FFD500', '#10b981', '#3b82f6', '#ec4899', '#a855f7'];
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.left = `${Math.random() * 60 + 20}px`;
+        piece.style.bottom = '70px';
+
+        const tx = ((Math.random() - 0.5) * 140) + 'px';
+        const ty = -(Math.random() * 50 + 60) + 'px';
+        piece.style.setProperty('--ctx', tx);
+        piece.style.setProperty('--cty', ty);
+        piece.style.animation = 'coddy-confetti-fall 1.8s ease-out forwards';
+        this.dom.errorContainer.appendChild(piece);
+
+        setTimeout(() => {
+            if (this.dom.errorContainer.contains(piece)) piece.remove();
+        }, 1800);
     }
 
     /* =========================================================================
@@ -524,6 +801,7 @@
      * @param {function} callback - Kullanıcı soruyu gönderdiğinde çalışacak fonksiyon
      */
     ask(title, callback) {
+        this._resetAutoSleepTimer();
         this.toggleMenu(false); // Menü açıksa kapat
         this.dom.bubble.classList.remove('show'); // Balon açıksa kapat
 
@@ -562,8 +840,56 @@
         this.config.theme = theme;
     }
 
+    /**
+     * Göz ifadesini değiştirir. State değişiminde otomatik olarak 'normal'e döner.
+     * @param {'normal'|'wink'|'shock'|'heart'|'tired'|'angry'|'star'} expression
+     */
+    setEyes(expression) {
+        const known = ['normal', 'wink', 'shock', 'heart', 'tired', 'angry', 'star'];
+        if (!known.includes(expression)) return;
+        this._clearEyeExpression();
+        if (expression !== 'normal') {
+            this.dom.wrapper.classList.add(`coddy-expr-${expression}`);
+        }
+    }
+
+    _clearEyeExpression() {
+        const expressions = ['wink', 'shock', 'heart', 'tired', 'angry', 'star'];
+        expressions.forEach(name => this.dom.wrapper.classList.remove(`coddy-expr-${name}`));
+    }
+
+    /**
+     * Bir promise'i izler ve maskotun state'ini ona göre yönetir:
+     * pending → working, resolved → celebrating, rejected → working(hata mesajı) → idle.
+     *
+     * @param {Promise} promise - İzlenecek promise.
+     * @param {object} [opts]
+     * @param {string} [opts.workingMsg] - Pending sırasında balon mesajı (boşsa havuzdan rastgele).
+     * @param {string} [opts.successMsg] - Başarıda balon mesajı (boşsa celebrating havuzundan rastgele).
+     * @param {string} [opts.errorMsg]   - Reddedilirse balon mesajı (boşsa err.message veya 'HATA OLUŞTU!').
+     * @returns {Promise} Orijinal promise'i pass-through eder (resolve/reject davranışını korur).
+     */
+    observe(promise, opts = {}) {
+        const { workingMsg = null, successMsg = null, errorMsg = null } = opts;
+        this.setState('working', workingMsg);
+        return Promise.resolve(promise).then(
+            (value) => {
+                this.setState('celebrating', successMsg);
+                return value;
+            },
+            (err) => {
+                const msg = errorMsg || (err && err.message) || 'HATA OLUŞTU!';
+                this.setState('working', msg);
+                setTimeout(() => {
+                    if (this.state === 'working') this.setState('idle');
+                }, 4000);
+                return Promise.reject(err);
+            }
+        );
+    }
+
     setState(newState, customMessage = null) {
-        if (!['idle', 'working', 'sleeping'].includes(newState)) return;
+        if (!['idle', 'working', 'sleeping', 'celebrating'].includes(newState)) return;
 
         // Kayan yazı durumlarını temizle
         clearTimeout(this.textTimer);
@@ -572,11 +898,14 @@
 
         this.dom.wrapper.classList.remove(`coddy-state-${this.state}`);
         this.dom.wrapper.classList.add(`coddy-state-${newState}`);
+        this._clearEyeExpression();
         this.state = newState;
 
         clearInterval(this.intervals.bug);
         clearInterval(this.intervals.keys);
+        clearInterval(this.intervals.confetti);
         clearTimeout(this.customSayTimer);
+        clearTimeout(this._celebrateTimer);
         this.dom.errorContainer.innerHTML = '';
         
         let message = customMessage;
@@ -588,6 +917,9 @@
         // State değiştiğinde menüyü ve promptu otomatik kapat
         this.toggleMenu(false);
         this.closePrompt();
+
+        // State değişimi inaktivite sayacını sıfırlar
+        this._resetAutoSleepTimer();
 
         if (newState === 'working') {
             this.dom.bubble.innerHTML = message || 'Çalışıyorum...';
@@ -605,8 +937,29 @@
             this.dom.bubble.innerHTML = message || 'Zzz...';
             this.dom.bubble.style.color = "var(--coddy-red)";
             this.dom.bubble.classList.add('show');
-            this.dom.eyes.style.transform = `translate(0, 0)`; 
-            
+            this.dom.eyes.style.transform = `translate(0, 0)`;
+
+        } else if (newState === 'celebrating') {
+            this.dom.bubble.innerHTML = message || 'YEHA!';
+            this.dom.bubble.style.color = '#10b981';
+            this.dom.bubble.classList.add('show');
+            this.dom.wrapper.classList.add('coddy-expr-star');
+
+            // Konfeti patlaması — 18 parça, ~60ms aralıkla
+            let confettiCount = 0;
+            this.intervals.confetti = setInterval(() => {
+                if (confettiCount++ >= 18) {
+                    clearInterval(this.intervals.confetti);
+                    return;
+                }
+                this._spawnConfetti();
+            }, 60);
+
+            // 2.5 sn sonra idle'a dön
+            this._celebrateTimer = setTimeout(() => {
+                if (this.state === 'celebrating') this.setState('idle');
+            }, 2500);
+
         } else {
             // Idle durumuna geçtiğinde kayan yazı döngüsünü aktif et
             this.scheduleTextAnimation();
@@ -623,6 +976,7 @@
 
     say(text, duration = 3000) {
         clearTimeout(this.customSayTimer);
+        this._resetAutoSleepTimer();
         this.dom.bubble.innerHTML = text;
         this.dom.bubble.style.color = this.state === 'working' ? 'var(--coddy-red)' : 'var(--coddy-bubble-text)';
         this.dom.bubble.classList.add('show');
@@ -696,19 +1050,42 @@
     destroy() {
         clearInterval(this.intervals.bug);
         clearInterval(this.intervals.keys);
+        clearInterval(this.intervals.confetti);
         clearTimeout(this.customSayTimer);
         clearTimeout(this.textTimer);
         clearTimeout(this.textDuration);
+        clearTimeout(this._madTimer);
+        clearTimeout(this._autoSleepTimer);
+        clearTimeout(this._celebrateTimer);
         if (this._onMouseMove) document.removeEventListener('mousemove', this._onMouseMove);
         if (this._onDocClick) document.removeEventListener('click', this._onDocClick);
-        if (this.dom.wrapper && this.dom.wrapper.parentNode) {
-            this.dom.wrapper.parentNode.removeChild(this.dom.wrapper);
+        if (this._onPointerMove) {
+            document.removeEventListener('mousemove', this._onPointerMove);
+            document.removeEventListener('touchmove', this._onPointerMove);
+        }
+        if (this._onPointerUp) {
+            document.removeEventListener('mouseup', this._onPointerUp);
+            document.removeEventListener('touchend', this._onPointerUp);
+        }
+        if (this.dom.wrapper) {
+            if (this._onMouseEnter) this.dom.wrapper.removeEventListener('mouseenter', this._onMouseEnter);
+            if (this._onMouseLeave) this.dom.wrapper.removeEventListener('mouseleave', this._onMouseLeave);
+            if (this._onDblClick) this.dom.wrapper.removeEventListener('dblclick', this._onDblClick);
+            if (this._onContextMenu) this.dom.wrapper.removeEventListener('contextmenu', this._onContextMenu);
+            if (this._onPointerDown) {
+                this.dom.wrapper.removeEventListener('mousedown', this._onPointerDown);
+                this.dom.wrapper.removeEventListener('touchstart', this._onPointerDown);
+            }
+            if (this.dom.wrapper.parentNode) {
+                this.dom.wrapper.parentNode.removeChild(this.dom.wrapper);
+            }
         }
     }
 
     init() {
         this.injectStyles();
         this.buildDOM();
+        this._restorePosition();
         this.bindEvents();
         this.setState(this.state);
     }

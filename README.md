@@ -110,6 +110,10 @@ Bu kadar. Sağ alt köşede maskot belirir.
 | `offsetY` | `number` | `40` | Alttan boşluk (px). |
 | `theme` | `string` | `'dark'` | `'dark'`, `'light'` veya `'metallic'`. |
 | `onClick` | `function` | `null` | Maskota tıklandığında çalışır. `(event, instance) => void`. Set edilmişse `menu` tıklamayı tetiklemez. |
+| `onContextMenu` | `function` | `null` | Maskota sağ tıklandığında çalışır. `(event, instance) => void`. Set edilmediyse Coddy snarky bir balon gösterir. Browser context menu her durumda bastırılır. |
+| `autoSleepTimeout` | `number` | `0` | Saniye cinsinden inaktivite süresi. `> 0` ise bu kadar süre etkileşim olmazsa idle'dan `sleeping`'e geçer. `0` veya `null` kapatır. Mouseenter, click, dblclick, sağ tık, `setState`/`say`/`ask` çağrıları sayacı sıfırlar. |
+| `draggable` | `boolean` | `true` | Kullanıcı maskotu fare/dokunmatik ile sürükleyip ekranda istediği yere koyabilir. Tıklama ile çakışmamak için 6 px hareket eşiği vardır. |
+| `persistPosition` | `boolean` | `true` | Sürüklenen pozisyon `localStorage`'a `coddy-position` anahtarıyla kaydedilir, sonraki ziyarette aynı yere yerleşir. `false` ile kapatın. |
 | `menu` | `array` | `null` | `{ label, onClick }` listesi. `onClick` set edilmediyse tıklama menüyü açar. |
 | `marqueeText` | `string` | `null` | Vizörden geçen kayan yazı. Boşsa kendiliğinden geçmez. |
 | `enableRandomMarquee` | `boolean` | `true` | `marqueeText` set ise idle modda 5-12 sn aralıkla kendiliğinden geçer. |
@@ -133,13 +137,16 @@ Bir `Coddy` örneği üzerinden çalışma zamanında her şeyi kontrol edebilir
 
 ### `setState(state, customMessage?)`
 
-Maskotun durumunu değiştirir. `state` üçünden biri olmalı: `'idle'`, `'working'`, `'sleeping'`. Mesaj vermezseniz ilgili havuzdan rastgele biri seçilir.
+Maskotun durumunu değiştirir. `state` şunlardan biri olmalı: `'idle'`, `'working'`, `'sleeping'`, `'celebrating'`. Mesaj vermezseniz ilgili havuzdan rastgele biri seçilir.
 
 ```js
 bot.setState('working');
 bot.setState('working', 'API CEVAP VERMİYOR!');
+bot.setState('celebrating', 'DEPLOY OK!'); // 2.5 sn sonra otomatik idle'a döner
 bot.setState('idle');
 ```
+
+`'celebrating'` state'i kendi kendine süre dolunca (2.5 sn) `'idle'`a döner ve konfeti + yıldız gözler ile gelir.
 
 ### `say(text, duration?)`
 
@@ -156,6 +163,36 @@ Tema'yı çalışma anında değiştirir. `'dark' | 'light' | 'metallic'`.
 
 ```js
 bot.setTheme('light');
+```
+
+### `setEyes(expression)`
+
+Maskotun göz ifadesini değiştirir. `'normal' | 'wink' | 'shock' | 'heart' | 'tired' | 'angry' | 'star'`. `setState` çağrılınca otomatik `'normal'`a döner.
+
+```js
+bot.setEyes('heart');     // beğeni / kalp gözler
+bot.setEyes('shock');     // yuvarlak şaşkın gözler
+bot.setEyes('wink');      // sağ göz kapalı
+bot.setEyes('tired');     // ^^ yorgun
+bot.setEyes('angry');     // keskin çekik kırmızı
+bot.setEyes('star');      // sarı yıldız (celebrating ile uyumlu)
+bot.setEyes('normal');    // varsayılana dön
+```
+
+### `observe(promise, opts?)`
+
+Bir promise'i izler ve maskotun state'ini ona göre yönetir:
+- Pending → `working` (`opts.workingMsg` veya idle havuzundan)
+- Resolved → `celebrating` (`opts.successMsg` veya celebrating havuzundan)
+- Rejected → `working` (`opts.errorMsg` veya `err.message`) → 4 sn sonra `idle`
+
+Promise'i pass-through eder — `.then()` / `.catch()` zincirine takılabilir.
+
+```js
+bot.observe(
+    fetch('/api/deploy').then(r => r.json()),
+    { workingMsg: 'DEPLOY EDİLİYOR...', successMsg: 'DEPLOY OK!', errorMsg: 'DEPLOY PATLADI!' }
+).then(data => console.log(data)).catch(err => console.error(err));
 ```
 
 ### `showMarqueeText(text, duration?)`
@@ -228,6 +265,7 @@ bot.destroy();
 | `idle` | Etrafa bakar, fareyi takip eder, ara sıra mesaj veya marquee gösterir. |
 | `working` | Klavyede titrer, gözleri kırmızıya döner, etrafa böcek/hata mesajları saçar. |
 | `sleeping` | Yana yıkılır, gözleri yanıp söner. |
+| `celebrating` | Zıplar, eller havaya, yıldız gözler, etrafa konfeti saçar. 2.5 sn sonra otomatik `idle`'a döner. |
 
 ### Temalar
 
@@ -236,6 +274,18 @@ bot.destroy();
 | `dark` | Koyu slate gövde, turuncu vurgular. Varsayılan. |
 | `light` | Açık tonlar, gri gövde. |
 | `metallic` | Alüminyum gümüş tonları (Apple esintili). |
+
+### Mikro etkileşimler
+
+Kullanıcının maskotla yaptığı kazara hareketlere küçük tepkiler:
+
+| Etkileşim | Tepki |
+| --- | --- |
+| Fareyi maskotun üzerine getirme | Idle'da gözler büyür ve parlar. State sleeping/working ise etkisiz. |
+| Çift tık | 1.5 sn süreyle geçici "öfke" reaksiyonu (gövde titrer, gözler kırmızı), rastgele bir homurtu balonu. Asıl state değişmez. |
+| Sağ tık | Browser context menu bastırılır. `onContextMenu` set edilmişse o çalışır; aksi halde snarky bir balon. |
+| `autoSleepTimeout` saniye inaktivite | Idle'dan otomatik `sleeping`'e geçiş. |
+| Sürükle-bırak | `draggable: true` ise (varsayılan) maskotu istediğiniz yere taşıyabilirsiniz. `persistPosition: true` ise `localStorage`'a kaydedilir. Bırakırken rastgele bir "yallah" balonu. |
 
 ## Örnekler
 
